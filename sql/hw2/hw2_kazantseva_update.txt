@@ -1,0 +1,87 @@
+--  Написать SQL запросы:
+-- 1.Выбрать все заказы (SALES_ORDER)
+-- 2.Выбрать все заказы, введенные после 1 января 2016 года
+-- 3.Выбрать все заказы, введенные после 1 января 2016 года и до 15 июля 2016 года
+-- 4.Найти менеджеров с именем 'Henry'
+-- 5.Выбрать все заказы менеджеров с именем Henry
+-- 6.Выбрать все уникальные страны из таблицы CITY
+-- 7.Выбрать все уникальные комбинации страны и региона из таблицы CITY
+-- 8.Выбрать все страны из таблицы CITY с количеством городов в них.
+-- 9.Выбрать количество товаров (QTY), проданное с 1 по 30 января 2016 года.
+-- 10.Выбрать все уникальные названия городов, регионов и стран в одной колонке
+-- 11.Вывести имена и фамилии менеджер(ов), продавшего товаров в январе 2016 года на наибольшую сумму.
+
+
+
+-- 6-7 - логичнее использовать distinct
+-- 9 - подразумевалось, что надо выбрать одно число - сумму количества товаров.
+
+
+-- #1
+SELECT * FROM sales_order;
+
+-- #2
+SELECT * FROM sales_order WHERE order_date > TO_DATE('01.01.2016', 'DD.MM.YYYY');
+
+-- #3
+SELECT * FROM sales_order 
+WHERE order_date > TO_DATE('01.01.2016', 'DD.MM.YYYY') 
+AND order_date < TO_DATE('15.07.2016', 'DD.MM.YYYY');
+
+-- #4
+SELECT * FROM manager WHERE manager_first_name = 'Henry';
+--SELECT * FROM manager WHERE UPPER(manager_first_name) = 'HENRY';
+
+-- #5
+SELECT mng.manager_first_name,
+		ord.sales_order_id, 
+		ord.order_date, 
+		ord.manager_id
+FROM manager mng 
+JOIN sales_order ord 
+ON mng.manager_id = ord.manager_id
+WHERE manager_first_name = 'Henry';
+
+-- #6
+SELECT DISTINCT country FROM city;
+
+-- #7
+SELECT DISTINCT region, country FROM city;
+
+-- #8
+SELECT country, COUNT(*) FROM city GROUP BY country;
+
+-- #9
+SELECT SUM(product_qty)
+FROM sales_order_line ordl 
+	JOIN sales_order ord 
+	ON ordl.sales_order_id = ord.sales_order_id
+WHERE order_date >= TO_DATE('01.01.2016', 'DD.MM.YYYY') 
+	AND order_date <= TO_DATE('30.01.2016', 'DD.MM.YYYY');
+
+-- #10
+SELECT country name_crc FROM city GROUP BY country
+UNION
+SELECT region FROM city GROUP BY region
+UNION
+SELECT city_name FROM city GROUP BY city_name;
+
+-- #11
+WITH sum_tmp AS (
+  	SELECT 
+  	  SUM(product_price*product_qty) r,
+	  manager_id 
+  	FROM sales_order_line ordl 
+		JOIN sales_order ord 
+		ON ordl.sales_order_id = ord.sales_order_id
+	WHERE order_date >= TO_DATE('01.01.2016', 'DD.MM.YYYY') 
+		AND order_date <= TO_DATE('31.01.2016', 'DD.MM.YYYY')
+	GROUP BY manager_id
+)
+SELECT manager_first_name,
+	manager_last_name
+FROM sum_tmp 
+	JOIN manager mng
+	ON sum_tmp.manager_id = mng.manager_id
+WHERE r = (SELECT MAX(r) FROM sum_tmp);
+

@@ -1,0 +1,88 @@
+-- Задание 5: рекурсивные запросы
+-- для таблицы file_system:
+
+
+
+-- Номер 1:
+-- Вывести все директории в виде:
+-- ID, Название, Путь до корня 
+
+WITH RECURSIVE fs_hierarchy(id, parant_id, name, type, file_size, path) AS (
+	SELECT id, parent_id, name, type, file_size, '/' || name::VARCHAR
+	FROM file_system WHERE parent_id is NULL
+	
+	UNION ALL
+	
+	SELECT fs.id, fs.parent_id, fs.name, fs.type, fs.file_size, fsh.path || '/' || fs.name 
+	FROM file_system fs 
+	JOIN fs_hierarchy fsh
+	ON fs.parent_id = fsh.id
+)
+SELECT id, name, path FROM fs_hierarchy WHERE type LIKE 'DIR';
+
+
+-- Номер 2:
+-- Для каждой директории посчитать объем занимаемого места на диске (с учетом всех вложенных папок)
+-- ID, Название, Путь до корня, total_size 
+
+WITH RECURSIVE fs_hierarchy(id, parent_id, name, type, file_size, path) AS (
+	SELECT id, parent_id, name, type, file_size, '/' || name::VARCHAR
+	FROM file_system WHERE parent_id is NULL
+	
+	UNION ALL
+	
+	SELECT fs.id, fs.parent_id, fs.name, fs.type, fs.file_size, fsh.path || '/' || fs.name
+	FROM file_system fs 
+	JOIN fs_hierarchy fsh
+	ON fs.parent_id = fsh.id
+)
+SELECT fsh1.id, fsh1.name, fsh1.path, SUM(fsh2.file_size) AS total_size
+FROM fs_hierarchy fsh1
+LEFT JOIN fs_hierarchy fsh2
+ON fsh2.path LIKE fsh1.path || '/%' OR fsh2.path LIKE fsh1.path
+WHERE fsh1.type LIKE 'DIR' --AND fsh1.id < 1000
+GROUP BY fsh1.id, fsh1.name, fsh1.path;
+
+
+-- Номер 3:
+-- Добавить в запрос: сколько процентов директория занимает места относительно всех среди своих соседей (siblings)
+-- ID, Название, Путь до корня, total_size, ratio
+
+WITH RECURSIVE fs_hierarchy(id, parent_id, name, type, file_size, path) AS (
+	SELECT id, parent_id, name, type, file_size, '/' || name::VARCHAR
+	FROM file_system WHERE parent_id is NULL
+	
+	UNION ALL
+	
+	SELECT fs.id, fs.parent_id, fs.name, fs.type, fs.file_size, fsh.path || '/' || fs.name
+	FROM file_system fs 
+	JOIN fs_hierarchy fsh
+	ON fs.parent_id = fsh.id
+),
+fs_size AS (
+	SELECT fsh1.id, fsh1.name, fsh1.parent_id, fsh1.path, SUM(fsh2.file_size) AS total_size
+	FROM fs_hierarchy fsh1
+	LEFT JOIN fs_hierarchy fsh2
+	ON fsh2.path LIKE fsh1.path || '/%' OR fsh2.path LIKE fsh1.path
+	WHERE fsh1.type LIKE 'DIR'
+	GROUP BY fsh1.id, fsh1.name, fsh1.parent_id, fsh1.path
+)
+SELECT fss1.id, 
+	   fss1.name, 
+	   fss1.path, 
+	   fss1.total_size, 
+	   CASE WHEN fss1.total_size=0 THEN 0.0
+            WHEN fss2.total_size IS NULL THEN 100.0
+            ELSE fss1.total_size * 100.0 / fss2.total_size 
+       END AS ratio
+	FROM fs_size fss1
+	LEFT JOIN fs_size fss2
+	ON fss1.parent_id = fss2.id;
+
+
+
+
+
+
+
+	

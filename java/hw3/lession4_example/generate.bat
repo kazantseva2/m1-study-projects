@@ -1,0 +1,1 @@
+mvn archetype:generate -DgroupId=org.vmk.dep508 -DartifactId=lession4 -DarchetypeArtifactId=maven-archetype-quickstart -DinteractiveMode=false

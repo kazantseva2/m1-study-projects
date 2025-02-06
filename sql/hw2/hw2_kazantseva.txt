@@ -1,0 +1,67 @@
+-- #1
+SELECT * FROM sales_order;
+
+-- #2
+SELECT * FROM sales_order WHERE order_date > TO_DATE('01.01.2016', 'DD.MM.YYYY');
+
+-- #3
+SELECT * FROM sales_order 
+WHERE order_date > TO_DATE('01.01.2016', 'DD.MM.YYYY') 
+AND order_date < TO_DATE('15.07.2016', 'DD.MM.YYYY');
+
+-- #4
+SELECT * FROM manager WHERE manager_first_name = 'Henry';
+--SELECT * FROM manager WHERE UPPER(manager_first_name) = 'HENRY';
+
+-- #5
+SELECT mng.manager_first_name,
+		ord.sales_order_id, 
+		ord.order_date, 
+		ord.manager_id
+FROM manager mng 
+JOIN sales_order ord 
+ON mng.manager_id = ord.manager_id
+WHERE manager_first_name = 'Henry';
+
+-- #6
+SELECT country FROM city GROUP BY country;
+
+-- #7
+SELECT region, country FROM city GROUP BY region, country;
+
+-- #8
+SELECT country, COUNT(*) FROM city GROUP BY country;
+
+-- #9
+SELECT product_qty
+FROM sales_order_line ordl 
+	JOIN sales_order ord 
+	ON ordl.sales_order_id = ord.sales_order_id
+WHERE order_date >= TO_DATE('01.01.2016', 'DD.MM.YYYY') 
+	AND order_date <= TO_DATE('30.01.2016', 'DD.MM.YYYY');
+
+-- #10
+SELECT country name_crc FROM city GROUP BY country
+UNION
+SELECT region FROM city GROUP BY region
+UNION
+SELECT city_name FROM city GROUP BY city_name;
+
+-- #11
+WITH sum_tmp AS (
+  	SELECT 
+  	  SUM(product_price*product_qty) r,
+	  manager_id 
+  	FROM sales_order_line ordl 
+		JOIN sales_order ord 
+		ON ordl.sales_order_id = ord.sales_order_id
+	WHERE order_date >= TO_DATE('01.01.2016', 'DD.MM.YYYY') 
+		AND order_date <= TO_DATE('31.01.2016', 'DD.MM.YYYY')
+	GROUP BY manager_id
+)
+SELECT manager_first_name,
+	manager_last_name
+FROM sum_tmp 
+	JOIN manager mng
+	ON sum_tmp.manager_id = mng.manager_id
+WHERE r = (SELECT MAX(r) FROM sum_tmp);

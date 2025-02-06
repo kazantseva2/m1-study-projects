@@ -1,0 +1,250 @@
+-- 1. Каждый месяц компания выдает премию в размере 5% от суммы продаж менеджеру,
+-- который за предыдущие 3 месяца продал товаров на самую большую сумму
+-- Выведите месяц, manager_id, manager_first_name, manager_last_name,
+-- премию за период с января по декабрь 2014 года
+
+ WITH one_month_table AS
+  (SELECT manager_id,
+          manager_first_name,
+          manager_last_name,
+          date_trunc('month', sale_date) AS date_month,
+          SUM(sale_amount) AS amount_month
+   FROM v_fact_sale
+   GROUP BY manager_id,
+            manager_first_name,
+            manager_last_name,
+            date_month),
+three_month_table AS
+  (SELECT mt1.manager_id,
+          mt1.manager_first_name,
+          mt1.manager_last_name,
+          mt1.amount_month,
+          mt1.date_month,
+          COALESCE(SUM(mt2.amount_month), 0) AS three_months
+   FROM one_month_table mt1
+   LEFT JOIN one_month_table mt2 
+   ON mt2.manager_id = mt1.manager_id
+   	  AND mt2.date_month BETWEEN mt1.date_month - INTERVAL '2 months' AND mt1.date_month
+   GROUP BY mt1.manager_id,
+            mt1.manager_first_name,
+            mt1.manager_last_name,
+            mt1.amount_month,
+            mt1.date_month),
+max_sale_table AS
+  (SELECT manager_id,
+          manager_first_name,
+          manager_last_name,
+          amount_month,
+          date_month,
+          three_months,
+          RANK() OVER(PARTITION BY date_month ORDER BY three_months DESC) rnk
+   FROM three_month_table)
+SELECT EXTRACT(month FROM date_month + INTERVAL '1 month') AS month_num,
+       manager_id,
+       manager_first_name,
+       manager_last_name,
+       three_months * 0.5 AS bonus
+FROM max_sale_table
+WHERE rnk = 1
+  AND date_month >= TO_DATE('01.12.2013', 'DD.MM.YYYY')
+  AND date_month <= TO_DATE('30.11.2014', 'DD.MM.YYYY');
+
+
+-- 2. Компания хочет оптимизировать количество офисов, 
+-- проанализировав относительные объемы продаж по офисам в течение периода с 2013-2014 гг.
+-- Выведите год, office_id, city_name, country, относительный объем продаж за текущий год
+-- Офисы, которые демонстрируют наименьший относительной объем в течение двух лет скорее всего будут закрыты.
+
+-- за объем продаж считаю sale_qty
+
+WITH volume_table AS
+	(SELECT extract(YEAR FROM sale_date) AS sale_year,
+		 	office_id,
+		 	city_name,
+		 	country,
+			SUM(sale_qty) AS volume
+	 FROM v_fact_sale
+	 WHERE EXTRACT(year FROM sale_date) BETWEEN 2013 AND 2014
+	 GROUP BY office_id, 
+		 	  sale_year, 
+		 	  city_name, 
+		 	  country)
+SELECT sale_year, 
+	   office_id,
+	   city_name,
+	   country,
+	   volume / SUM(volume) OVER(PARTITION BY sale_year) AS relative_volume
+FROM volume_table
+ORDER BY office_id;
+
+
+-- 3. Для планирования закупок, компания оценивает динамику роста продаж по товарам.
+-- Динамика оценивается как отношение объема продаж в текущем месяце к предыдущему.
+-- Выведите товары, которые демонстрировали наиболее высокие темпы роста продаж 
+-- в течение первого полугодия 2014 года.
+
+WITH month_table AS
+	(SELECT product_id, 
+	   		product_name,
+	   		SUM(sale_qty) AS sum_qty,
+	   		DATE_TRUNC('month', sale_date) AS date_month
+	 FROM v_fact_sale
+	 WHERE sale_date >= TO_DATE('01.12.2013', 'DD.MM.YYYY')
+      	   AND sale_date < TO_DATE('01.07.2014', 'DD.MM.YYYY')
+	 GROUP BY product_id, 
+	    	  product_name,
+	     	  date_month)
+SELECT mt1.product_id, 
+	 	   mt1.product_name,
+	       mt1.sum_qty / mt2.sum_qty AS dinamic,
+	       EXTRACT(month FROM mt1.date_month) AS month_num
+	 FROM month_table mt1
+	 JOIN  month_table mt2 -- если спользовать LEFT JOIN останутся товары, которые не продавались в предыдущем месяце
+	 ON mt1.product_id = mt2.product_id 
+        AND mt2.date_month = mt1.date_month - INTERVAL '1 months'
+ORDER BY dinamic DESC
+LIMIT 10;
+
+
+-- 4. Напишите запрос, который выводит отчет о прибыли компании за 2014 год: 
+-- помесячно и поквартально.
+-- Отчет включает сумму прибыли за период и накопительную сумму прибыли
+-- с начала года по текущий период.
+
+WITH month_table AS
+	(SELECT DATE_TRUNC('month', sale_date) AS date_month,
+	   		DATE_TRUNC('quarter', sale_date) AS date_quarter,
+	   		SUM(sale_amount) AS amount_month
+	 FROM v_fact_sale
+	 WHERE EXTRACT(year FROM sale_date) = 2014
+	 GROUP BY date_month, date_quarter)
+SELECT EXTRACT(month FROM date_month) AS month_num, 
+	   amount_month,
+	   SUM(amount_month) OVER(PARTITION BY  date_quarter) AS amount_quarter,
+	   SUM(amount_month) OVER (ORDER BY date_month) AS cumulative_amount
+FROM month_table;
+
+
+-- 5. Найдите вклад в общую прибыль за 2014 год 10% наиболее дорогих товаров 
+-- и 10% наиболее дешевых товаров.
+-- Выведите product_id, product_name, total_sale_amount, percent
+
+-- считаю стоимость товара как среднюю стоимость за 2014
+
+WITH group_table AS
+    (SELECT product_id, 
+            product_name,
+        	AVG(sale_price) AS avg_price,
+        	SUM(sale_amount) AS total_sale_amount,
+        	NTILE(10) OVER (ORDER BY AVG(sale_price) DESC) AS group_num
+    FROM v_fact_sale
+    WHERE EXTRACT(year FROM sale_date) = 2014
+    GROUP BY product_id, product_name)
+SELECT product_id, 
+       product_name,
+       total_sale_amount,
+	   total_sale_amount / (SELECT SUM(sale_amount)
+    						 FROM v_fact_sale
+    						 WHERE EXTRACT(year FROM sale_date) = 2014) AS percent
+FROM group_table
+WHERE group_num = 1
+	  OR group_num = 10;
+
+
+-- 6. Компания хочет премировать трех наиболее продуктивных 
+-- (по объему продаж, конечно) менеджеров в каждой стране в 2014 году.
+-- Выведите country, <список manager_last_name manager_first_name, 
+-- разделенный запятыми> которым будет выплачена премия
+
+WITH rnk_table AS
+	(SELECT country,
+	   		manager_id,
+	   		manager_last_name,
+	   		manager_first_name,
+	   		SUM(sale_qty) AS sum_qty,
+	   		RANK() OVER(PARTITION BY country ORDER BY SUM(sale_qty)) AS rnk
+	 FROM v_fact_sale
+	 WHERE EXTRACT(year FROM sale_date) = 2014
+	 GROUP BY country,
+	   		  manager_id,
+	   		  manager_last_name,
+	   		  manager_first_name)
+SELECT 
+    country,
+    STRING_AGG(CONCAT(manager_last_name, ' ', manager_first_name), ', ') AS managers
+FROM rnk_table
+WHERE rnk <= 3
+GROUP BY country;
+
+
+-- 7. Выведите самый дешевый и самый дорогой товар, 
+-- проданный за каждый месяц в течение 2014 года.
+-- cheapest_product_id, cheapest_product_name, expensive_product_id,
+-- expensive_product_name, month, cheapest_price, expensive_price
+
+-- 1 способ
+WITH sort_price_table AS
+	(SELECT EXTRACT(month FROM sale_date) AS month_num,
+			product_id,
+			product_name,
+			sale_price,
+			RANK() OVER(PARTITION BY EXTRACT(month FROM sale_date) ORDER BY sale_price DESC) rnk_expensive,
+			RANK() OVER(PARTITION BY EXTRACT(month FROM sale_date) ORDER BY sale_price) rnk_cheap
+	 FROM v_fact_sale
+	 WHERE EXTRACT(year FROM sale_date) = 2014)
+SELECT 
+    spt1.product_id AS cheapest_product_id,
+    spt2.product_name AS cheapest_product_name,
+    spt1.product_id AS expensive_product_id,
+    spt2.product_name AS expensive_product_name,
+	spt1.month_num AS month,
+    spt1.sale_price AS cheapest_price,
+    spt2.sale_price AS expensive_price
+FROM sort_price_table spt1
+JOIN sort_price_table spt2
+ON spt1.month_num = spt2.month_num
+   AND spt1.rnk_cheap = spt2.rnk_expensive
+WHERE spt1.rnk_cheap = 1;
+
+-- 2 способ
+WITH sort_price_table AS
+	(SELECT EXTRACT(month FROM sale_date) AS month_num,
+			product_id,
+			product_name,
+			sale_price,
+			RANK() OVER(PARTITION BY EXTRACT(month FROM sale_date) ORDER BY sale_price DESC) rnk_expensive,
+			RANK() OVER(PARTITION BY EXTRACT(month FROM sale_date) ORDER BY sale_price) rnk_cheap
+	 FROM v_fact_sale
+	 WHERE EXTRACT(year FROM sale_date) = 2014)
+SELECT 
+    MIN(CASE WHEN rnk_cheap = 1 THEN product_id END) AS cheapest_product_id,
+    MIN(CASE WHEN rnk_cheap = 1 THEN product_name END) AS cheapest_product_name,
+    MIN(CASE WHEN rnk_expensive = 1 THEN product_id END) AS expensive_product_id,
+    MIN(CASE WHEN rnk_expensive = 1 THEN product_name END) AS expensive_product_name,
+	month_num AS month,
+    MIN(CASE WHEN rnk_cheap = 1 THEN sale_price END) AS cheapest_price,
+    MIN(CASE WHEN rnk_expensive = 1 THEN sale_price END) AS expensive_price
+FROM sort_price_table
+GROUP BY month_num;
+
+
+-- 8. Менеджер получает оклад в 30 000 + 5% от суммы своих продаж в месяц. 
+-- Средняя наценка стоимости товара - 10%
+-- Посчитайте прибыль предприятия за 2014 год по месяцам 
+-- (сумма продаж - (исходная стоимость товаров + зарплата))
+-- month, sales_amount, salary_amount, profit_amount
+
+WITH realization_of_manager AS
+	(SELECT EXTRACT(month FROM sale_date) AS month_num,
+			SUM(sale_amount) as amount_manager
+	 FROM v_fact_sale
+	 WHERE EXTRACT(year FROM sale_date) = 2014
+	 GROUP BY manager_id, month_num)
+SELECT month_num AS month,
+	   SUM(amount_manager) AS sales_amount,
+	   COUNT(*) * 30000 + 0.05 * SUM(amount_manager) AS salary_amount,
+	   SUM(amount_manager) * 0.05 - COUNT(*) * 30000 AS profit_amount
+FROM realization_of_manager
+GROUP BY month_num;
+	 
+
