@@ -50,7 +50,7 @@ double Energy::computeEnergy(const Lattice& lt, bool vacuum) const {
     double lower_limit = 0, upper_limit = lt.a.length() * lt.N;
     double E = 0;
 
-    #pragma omp parallel for reduction(+:E)
+   // #pragma omp parallel for reduction(+:E)
     for (size_t i = 0; i < lt.atoms.size(); ++i) {
         const Atom& atom = lt.atoms[i];
         double Eb = 0, Er = 0;
@@ -76,11 +76,19 @@ double Energy::computeEnergy(const Lattice& lt, bool vacuum) const {
             }
 
             double r = nb_coord.multiplyByVector(lt.a).length();
+            if (i == 0 && nb_coord.x < 1 && nb_coord.y < 1 && nb_coord.z < 1 
+                && nb_coord.x >= 0 && nb_coord.y >= 0 && nb_coord.z >= 0 ) {
+                nb_coord.print();
+                cout << r << " mod_dist="<<nb_coord.length()<<endl;
+            }
             Eb += computeBindingEnergy(r, s);
             Er += computeRepulsionEnergy(r, s);
         }
-        #pragma omp critical
+        //#pragma omp critical
         E += Er - sqrt(Eb); 
+        if (i == 0) {
+            cout << "энергия одного: " << E << endl; 
+        }
     }
     return E;
 }

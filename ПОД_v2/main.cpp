@@ -8,9 +8,12 @@
 // ./main
 
 int main() {
-    int N = 3;
+    int N = 1;
     double a = 4.085;
     Lattice lattice = Lattice(N, a);
+    Energy energy = Energy();
+    cout << energy.computeEnergy(lattice) << endl;
+    //cout << energy.computeCohesionEnergy(lattice) << endl;
 
     // Parameters paramAA = Parameters();
     // paramAA.A0 = 0.2061; paramAA.A1 = 0.0; paramAA.pr = 10.229; paramAA.q = 4.036;
@@ -108,10 +111,10 @@ int main() {
     // // Засекаем время
     // auto start = std::chrono::high_resolution_clock::now();
 
-    Optimize opt = Optimize();
-    opt.optimize(lattice, 6, Structure::BASE, 0.001);
+    // Optimize opt = Optimize();
+    // opt.optimize(lattice, 6, Structure::BASE, 0.001);
 
-    Energy energy1 = Energy(opt.pg_opt);
+    // Energy energy1 = Energy(opt.pg_opt);
     // cout << "Оптимальные параметры AA:" << endl;
     // opt.pg_opt.paramAA.print();
    
@@ -129,8 +132,8 @@ int main() {
     // cout << "    C44: " << elVls.C44 << " (opt: " << opt.C44_opt << ")" << endl;
 
     
-    opt.optimize(lattice, 6, Structure::SOLUTION, 0.0001);
-    Energy energy2 = Energy(opt.pg_opt);
+    // opt.optimize(lattice, 6, Structure::SOLUTION, 0.0001);
+    // Energy energy2 = Energy(opt.pg_opt);
 
     // cout << "Оптимальные параметры AB:" << endl;
     // opt.pg_opt.paramAB.print();
@@ -141,8 +144,8 @@ int main() {
 
 
 
-    opt.optimize(lattice, 6, Structure::EXTRA, 0.001);
-    Energy energy3 = Energy(opt.pg_opt);
+    // opt.optimize(lattice, 6, Structure::EXTRA, 0.001);
+    // Energy energy3 = Energy(opt.pg_opt);
 
     // cout << "Оптимальные параметры BB:" << endl;
     // opt.pg_opt.paramBB.print();
@@ -164,16 +167,16 @@ int main() {
    
    
 
-    ofstream outputFile("data.txt");
-    if (outputFile.is_open()) {
-        cout << "равномерно" << endl;
-        for (int i = 1; i < 10; i+=0.1) {
-            double y = energy1.computeEnergyOne(i, Structure::BASE);
-            outputFile << i  << " " << y << "\n";
-        }
-        outputFile.close();
-    } else {
-        cerr << "Не удалось открыть файл для записи!" << endl;
-    }
+    // ofstream outputFile("data.txt");
+    // if (outputFile.is_open()) {
+    //     cout << "равномерно" << endl;
+    //     for (int i = 1; i < 10; i+=0.1) {
+    //         double y = energy1.computeEnergyOne(i, Structure::BASE);
+    //         outputFile << i  << " " << y << "\n";
+    //     }
+    //     outputFile.close();
+    // } else {
+    //     cerr << "Не удалось открыть файл для записи!" << endl;
+    // }
     return 0;
 }
